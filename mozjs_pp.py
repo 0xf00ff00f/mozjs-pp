@@ -87,6 +87,16 @@ class JSValuePrinter:
                         data = jsstring_ptr['d']['s']['u2']['nonInlineCharsTwoByte']
                 string = data.string(length=length)
                 value = f'"{string}"'
+            elif tag == JSVAL_TAG_OBJECT:
+                shifted_tag = JSVAL_TAG_OBJECT << JSVAL_TAG_SHIFT;
+                addr = bits ^ shifted_tag
+                jsobject_ptr = gdb.Value(addr).cast(gdb.lookup_type('JSObject').pointer())
+                shape_ptr = gdb.Value(jsobject_ptr['header_']['value_']).cast(gdb.lookup_type('js::Shape').pointer())
+                base_shape_ptr = gdb.Value(shape_ptr['header_']['value_']).cast(gdb.lookup_type('js::BaseShape').pointer())
+                class_ptr = gdb.Value(base_shape_ptr['header_']['value_']).cast(gdb.lookup_type('JSClass').pointer())
+                class_name = class_ptr['name'].string()
+                # TODO: prototype name
+                value = f'class={class_name}'
         result = tag_name
         if value is not None:
             result += f"({value})"
