@@ -50,19 +50,18 @@ class JSValuePrinter:
     def to_string(self):
         bits = int(self._val['asBits_'])
         is_double = bits <= JSVAL_SHIFTED_TAG_MAX_DOUBLE
-        tag_name = None
-        value = None
         if is_double:
-            tag_name = 'Double'
             value = ctypes.c_double.from_buffer(ctypes.c_uint64(bits)).value # thanks clanker
+            return f'Double({value})'
         else:
             tag = bits >> JSVAL_TAG_SHIFT
-            tag_name = self._JSVAL_TAG_TYPE.get(tag, 'Unknown')
             if tag == JSVAL_TAG_INT32:
                 value = bits & ((1 << 32) - 1)
+                return f'Int32({value})'
             elif tag == JSVAL_TAG_BOOLEAN:
                 b = bits & ((1 << JSVAL_TAG_SHIFT) - 1)
                 value = 'false' if b == 0 else 'true'
+                return f'Boolean({value})'
             elif tag == JSVAL_TAG_STRING:
                 # StringFlags
                 LATIN1_CHARS_BIT = 1 << 10
@@ -86,21 +85,19 @@ class JSValuePrinter:
                     else:
                         data = jsstring_ptr['d']['s']['u2']['nonInlineCharsTwoByte']
                 string = data.string(length=length)
-                value = f'"{string}"'
+                return f'String("{string}")'
             elif tag == JSVAL_TAG_OBJECT:
                 shifted_tag = JSVAL_TAG_OBJECT << JSVAL_TAG_SHIFT;
                 addr = bits ^ shifted_tag
                 jsobject_ptr = gdb.Value(addr).cast(gdb.lookup_type('JSObject').pointer())
                 shape_ptr = gdb.Value(jsobject_ptr['header_']['value_']).cast(gdb.lookup_type('js::Shape').pointer())
                 base_shape_ptr = gdb.Value(shape_ptr['header_']['value_']).cast(gdb.lookup_type('js::BaseShape').pointer())
-                class_ptr = gdb.Value(base_shape_ptr['header_']['value_']).cast(gdb.lookup_type('JSClass').pointer())
-                class_name = class_ptr['name'].string()
+                jsclass_ptr = gdb.Value(base_shape_ptr['header_']['value_']).cast(gdb.lookup_type('JSClass').pointer())
+                jsclass_name = jsclass_ptr['name'].string()
                 # TODO: prototype name
-                value = f'class={class_name}'
-        result = tag_name
-        if value is not None:
-            result += f"({value})"
-        return result
+                return f'Object(class={jsclass_name})'
+            else:
+                return self._JSVAL_TAG_TYPE.get(tag, '???')
 
 def mozjs_pp_func(val):
     type_tag = val.type.unqualified().strip_typedefs().tag
